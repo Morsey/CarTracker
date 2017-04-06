@@ -54,7 +54,7 @@ while True:
             #We have a box
             (x, y, w, h) = cv2.boundingRect(sortedContours[0])
             #only look at big boxes
-            if h > 10 and w > 10:
+            if h > 10 and w > 20:
                 cv2.rectangle(i, (x, y), (x + w, y + h), (0, 255, 0), 1)
 
                 # only act on downhill
