@@ -4,7 +4,7 @@ import numpy as np
 import time
 import math
 from datetime import datetime
-
+import os
 
 
 def tallestContour(c):
@@ -65,7 +65,7 @@ while True:
         bbox = (x,y,w,h)
         #only look at big boxes
 
-        if h > 20 and w > 20:
+        if h > 10 and w > 10:
             #start tracking if whole box in window
 
             if x > 5 and x+w < image_width -5:
@@ -79,6 +79,7 @@ while True:
                     oldbbox = bbox
                     oldtime = sTime()
                     while True:
+
                         # Read a new frame
                         ret, frame = cap.read()
                         frame =  cv2.rotate(frame,cv2.ROTATE_180)
@@ -95,7 +96,7 @@ while True:
                             ok = False
 
                         #check big enough object still
-                        if x < 20 or y < 20:
+                        if x < 10 or y < 10:
                             ok = False
 
                         oldC = centre(oldbbox)
@@ -124,8 +125,10 @@ while True:
                             p1 = (int(bbox[0]), int(bbox[1]))
                             p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
                             cv2.rectangle(frame, p1, p2, (0, 0, 255))
-                            cv2.putText(frame,"test",(10,image_height-30),cv2.FONT_HERSHEY_PLAIN,1,(255,255),2)
+                            speedText =  str(velocity)+ "mph"
+                            cv2.putText(frame,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),2)
                             cv2.imshow('colour', frame)
+                            cv2.imwrite("car.jpg",frame)
                             cv2.waitKey(1)
 
 
