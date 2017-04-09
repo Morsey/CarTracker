@@ -18,9 +18,11 @@ kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(2,2))
 
 stream = urllib.request.urlopen('http://192.168.123.175:8080/?action=stream')
 
-cap = cv2.VideoCapture('http://192.168.123.175:8080/?action=stream&.mjpg')
+#cap = cv2.VideoCapture('http://192.168.123.175:8080/?action=stream&.mjpg')
+cap = cv2.VideoCapture('test.mp4')
 
 
+tracker = cv2.Tracker_create("MEDIANFLOW")
 bytes = bytes()
 
 tracking = False
@@ -53,35 +55,43 @@ while True:
     if sortedContours:
         #We have a box
         (x, y, w, h) = cv2.boundingRect(sortedContours[0])
+        bbox = (x,y,w,h)
         #only look at big boxes
-        if h > 10 and w > 20:
-            cv2.rectangle(i, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        if h > 5 and w > 5:
 
             #start tracking if whole box in window
             if x > 5 and x+w < width -5:
+
+                ok = tracker.init(i, bbox)
+                cv2.rectangle(i, (x, y), (x + w, y + h), (0, 255, 0), 1)
                 print('in frame')
-                if tracking:
-                    #measure difference
-                    deltax = x - oldx
-                    deltat = newTime - oldTime
-                    speed = (deltax * 0.05 / (deltat/1000000) )* 2.2
-                    print(deltax, "  " , deltat, "  ", speed)
-                    oldx = x
-                    oldTime = newTime
-                else:
-                    oldx = x
-                    oldTime = newTime
-                    tracking = True
+                while True:
+                    # Read a new frame
+                    ret, frame = cap.read()
+                    frame =  cv2.rotate(frame,cv2.ROTATE_180)
+                    # Update tracker
+                    print("checking")
+                    ok, bbox = tracker.update(frame)
+                    print("checked")
+
+                    # Draw bounding box
+                    if ok:
+                        p1 = (int(bbox[0]), int(bbox[1]))
+                        p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
+                        cv2.rectangle(frame, p1, p2, (0, 0, 255))
+                        cv2.imshow("Tracking", frame)
+                        print("ok")
+                    if not ok:
+                        print("not ok")
+                        break
+                    # Display result
+
 
 
         else:
             if tracking:
                 #finish tracking
                 tracking = False
-
-
-
-
 
 
     cv2.imshow('colour', i)
