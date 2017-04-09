@@ -6,15 +6,14 @@ import math
 from datetime import datetime
 import os
 
-
+FAKE = True
+FAKE_SLEEP = 0.05
 def tallestContour(c):
     (x, y, w, h) = cv2.boundingRect(c)
     return h;
 
-def sTime():
-    dt = datetime.now()
+def secondsTime(dt):
     return dt.second + dt.microsecond / 1000000
-
 
 def centre(bbox):
     return int(bbox[0] + bbox[2]/2), int(bbox[1] + bbox[3]/2)
@@ -26,9 +25,11 @@ fgbg = cv2.createBackgroundSubtractorMOG2()
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(2,2))
 
 stream = urllib.request.urlopen('http://192.168.123.175:8080/?action=stream')
+if FAKE:
+    cap = cv2.VideoCapture('test.mp4')
+else:
+    cap = cv2.VideoCapture('http://192.168.123.175:8080/?action=stream&.mjpg')
 
-cap = cv2.VideoCapture('http://192.168.123.175:8080/?action=stream&.mjpg')
-#cap = cv2.VideoCapture('test.mp4')
 
 
 tracker = cv2.Tracker_create("MEDIANFLOW")
@@ -38,7 +39,11 @@ bytes = bytes()
 
 while True:
 
-    ret, i = cap.read()
+    ok, i = cap.read()
+    if not ok:
+        break
+    if FAKE:
+        time.sleep(FAKE_SLEEP)
     image_height,image_width = i.shape[:2]
 
     i =  cv2.rotate(i,cv2.ROTATE_180)
@@ -77,26 +82,32 @@ while True:
                 if ok:
                     print("Have object to track")
                     oldbbox = bbox
-                    oldtime = sTime()
+                    oldtime = datetime.now()
+                    trackNo = 0;
                     while True:
+                        trackNo = trackNo+1
 
                         # Read a new frame
                         ret, frame = cap.read()
+                        if FAKE:
+                            time.sleep(FAKE_SLEEP)
                         frame =  cv2.rotate(frame,cv2.ROTATE_180)
                         # Update tracker
 
                         ok, bbox = tracker.update(frame)
 
-                        newtime = sTime()
-                        deltaT = newtime - oldtime
+                        newtime = datetime.now()
+                        deltaT = secondsTime(newtime) - secondsTime(oldtime)
                         oldtime = newtime
 
                         #if close to the end of the frame, drop out
                         if bbox[0] < 5 or bbox[1] < 5 or bbox[0] > (image_width - bbox[2] -5) or (bbox[1] > image_height - bbox[3] -5):
+                            print("at an edge   " ,ok, "  ", bbox)
                             ok = False
 
                         #check big enough object still
                         if x < 10 or y < 10:
+                            print("too small")
                             ok = False
 
                         oldC = centre(oldbbox)
@@ -108,6 +119,7 @@ while True:
                         deltaS = pixelsMoved(oldC, newC) * 0.05
 
                         if deltaS == 0:
+                            print("no deltaS")
                             ok = False
 
                         # calculate speed (1 pixel ~0.05m)
@@ -125,17 +137,44 @@ while True:
                             p1 = (int(bbox[0]), int(bbox[1]))
                             p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
                             cv2.rectangle(frame, p1, p2, (0, 0, 255))
+                            cv2.rectangle(frame,(0,0),(image_width,60),(0,0,0),-1)
+
                             speedText =  str(velocity)+ "mph"
-                            cv2.putText(frame,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),2)
+                            cv2.putText(frame,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),1)
                             cv2.imshow('colour', frame)
                             cv2.imwrite("car.jpg",frame)
                             cv2.waitKey(1)
 
-
+                            #save first and last images, combine and save with time difference
+                            if trackNo ==1:
+                                firstImage = frame.copy()
+                                firstTime = oldtime
+                                firstCentre = newC
+                            lastImage = frame.copy()
+                            lastTime = oldtime
+                            lastCentre = newC
                         if not ok:
                             #reset tracker
                             tracker = cv2.Tracker_create("MEDIANFLOW")
                             print("Finished Tracking \n\n")
+
+                            #save summary image
+                            summaryImage = np.concatenate((firstImage,lastImage),axis=1)
+
+                            #  cv2.rectangle(summaryImage,(0,0),(image_width*2,60),(0,0,0),-1)
+                           # deltaS = pixelsMoved(firstCentre, lastCentre) * 0.05
+                           # speedText =  str(velocity)+ "mph"
+                           # cv2.putText(summaryImage,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),1)
+
+                            timeString = str(firstTime)
+                            cv2.putText(summaryImage, timeString, (20, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                            timeString = str(lastTime)
+                            cv2.putText(summaryImage, timeString, (20 + image_width, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+
+                            cv2.imshow("last summary", summaryImage)
+
+                            timestr = time.strftime("%Y%m%d-%H%M%S.jpg")
+                            cv2.imwrite(timestr,summaryImage)
                             break
 
 
