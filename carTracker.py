@@ -4,10 +4,11 @@ import numpy as np
 import time
 import math
 from datetime import datetime
+import pysftp
 import os
 
 FAKE = True
-FAKE_SLEEP = 0.05
+FAKE_SLEEP = 0.1
 def tallestContour(c):
     (x, y, w, h) = cv2.boundingRect(c)
     return h;
@@ -20,6 +21,17 @@ def centre(bbox):
 
 def pixelsMoved(oC,nC):
     return math.sqrt(math.pow(math.fabs(oC[0] - nC[0]),2) +  math.pow(math.fabs(oC[1] - nC[1]),2))
+
+
+f = open("password")
+password = f.readline()
+
+password = str(password)
+cnopts = pysftp.CnOpts()
+cnopts.hostkeys = None
+srv = pysftp.Connection(host="home84386385.1and1-data.host",username="u35045545-9",password=password,cnopts=cnopts)
+srv.cd("/kunden/homepages/0/d84386385/htdocs/www.robmorse.com/cars")
+
 
 fgbg = cv2.createBackgroundSubtractorMOG2()
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(2,2))
@@ -173,8 +185,9 @@ while True:
 
                             cv2.imshow("last summary", summaryImage)
 
-                            timestr = time.strftime("%Y%m%d-%H%M%S.jpg")
+                            timestr = time.strftime("trackedCars/%Y%m%d-%H%M%S.jpg")
                             cv2.imwrite(timestr,summaryImage)
+                            srv.put(timestr, "car.jpg")
                             break
 
 
