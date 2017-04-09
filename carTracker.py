@@ -20,9 +20,6 @@ stream = urllib.request.urlopen('http://192.168.123.175:8080/?action=stream')
 
 cap = cv2.VideoCapture('http://192.168.123.175:8080/?action=stream&.mjpg')
 
-roadMask = cv2.imread('/Users/rob/CarTracking/roadMask_1.jpg')
-roadMask = cv2.cvtColor(roadMask,cv2.COLOR_BGR2GRAY)
-roadMask = cv2.rotate(roadMask,cv2.ROTATE_180)
 
 bytes = bytes()
 
