@@ -7,7 +7,7 @@ from datetime import datetime
 import pysftp
 import os
 
-FAKE = True
+FAKE = False
 FAKE_SLEEP = 0.1
 def tallestContour(c):
     (x, y, w, h) = cv2.boundingRect(c)
@@ -142,6 +142,7 @@ while True:
                         # Draw bounding box
                         if ok and deltaS > 0.2:
 
+
                             print(velocity, " ", deltaS, " ", deltaT)
 
 
@@ -151,12 +152,6 @@ while True:
                             cv2.rectangle(frame, p1, p2, (0, 0, 255))
                             cv2.rectangle(frame,(0,0),(image_width,60),(0,0,0),-1)
 
-                            speedText =  str(velocity)+ "mph"
-                            cv2.putText(frame,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),1)
-                            cv2.imshow('colour', frame)
-                            cv2.imwrite("car.jpg",frame)
-                            cv2.waitKey(1)
-
                             #save first and last images, combine and save with time difference
                             if trackNo ==1:
                                 firstImage = frame.copy()
@@ -165,29 +160,46 @@ while True:
                             lastImage = frame.copy()
                             lastTime = oldtime
                             lastCentre = newC
+                            lastVelocity = velocity
+
+
+                            speedText =  str(velocity)+ "mph"
+                            cv2.putText(frame,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),1)
+                            cv2.imshow('colour', frame)
+                            cv2.imwrite("car.jpg",frame)
+                            cv2.waitKey(1)
+
+
                         if not ok:
                             #reset tracker
                             tracker = cv2.Tracker_create("MEDIANFLOW")
                             print("Finished Tracking \n\n")
 
-                            #save summary image
-                            summaryImage = np.concatenate((firstImage,lastImage),axis=1)
+                            #save summary image if we have been tracking
+                            if trackNo >0 :
+                                deltaT = secondsTime(lastTime) - secondsTime(firstTime)
+                                if deltaT > 0:
+                                    deltaS = pixelsMoved(firstCentre, lastCentre) * 0.05
+                                    summaryImage = np.concatenate((firstImage,lastImage),axis=1)
 
-                            #  cv2.rectangle(summaryImage,(0,0),(image_width*2,60),(0,0,0),-1)
-                           # deltaS = pixelsMoved(firstCentre, lastCentre) * 0.05
-                           # speedText =  str(velocity)+ "mph"
-                           # cv2.putText(summaryImage,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),1)
+                                    velocity = int((deltaS / (deltaT)) * 2.2)
 
-                            timeString = str(firstTime)
-                            cv2.putText(summaryImage, timeString, (20, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-                            timeString = str(lastTime)
-                            cv2.putText(summaryImage, timeString, (20 + image_width, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                                    summaryText =  "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity,deltaS,deltaT)
 
-                            cv2.imshow("last summary", summaryImage)
+                                    cv2.rectangle(summaryImage, (0, 0), (image_width*2, 50), (0, 0, 0), -1)
+                                    print(summaryText)
+                                    timeString = str(firstTime)
+                                    cv2.putText(summaryImage, timeString, (20, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                                    timeString = str(lastTime)
+                                    cv2.putText(summaryImage, timeString, (20 + image_width, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                                    cv2.putText(summaryImage, summaryText, (20 , 30), cv2.FONT_HERSHEY_PLAIN, 1,
+                                                (0, 0, 255), 1)
 
-                            timestr = time.strftime("trackedCars/%Y%m%d-%H%M%S.jpg")
-                            cv2.imwrite(timestr,summaryImage)
-                            srv.put(timestr, "car.jpg")
+                                    cv2.imshow ("last summary", summaryImage)
+
+                                    timestr = "trackedCars/" + str(velocity) + "-" + time.strftime("%Y%m%d-%H%M%S.jpg")
+                                    cv2.imwrite(timestr,summaryImage)
+                                    srv.put(timestr, "car.jpg")
                             break
 
 
