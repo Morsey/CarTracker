@@ -14,7 +14,7 @@ def tallestContour(c):
     return h;
 
 def secondsTime(dt):
-    return dt.second + dt.microsecond / 1000000
+    return  dt.second + dt.microsecond / 1000000
 
 def centre(bbox):
     return int(bbox[0] + bbox[2]/2), int(bbox[1] + bbox[3]/2)
@@ -199,9 +199,9 @@ while True:
 
                                         cv2.imshow ("last summary", summaryImage)
 
-                                        timestr = "trackedCars/" + str(velocity) + "-" + time.strftime("%Y%m%d-%H%M%S.jpg")
+                                        timestr = "trackedCars/" + str(velocity) + "-" + time.strftime("%Y%m%d-%H%M%S.png")
                                         cv2.imwrite(timestr,summaryImage)
-                                        srv.put(timestr, "car.jpg")
+                                        srv.put(timestr, "car.png")
                             break
 
 
