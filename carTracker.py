@@ -47,7 +47,8 @@ else:
 tracker = cv2.Tracker_create("MEDIANFLOW")
 bytes = bytes()
 
-
+lastTime =0
+firstTime =0
 
 while True:
 
@@ -180,26 +181,27 @@ while True:
                                 deltaT = secondsTime(lastTime) - secondsTime(firstTime)
                                 if deltaT > 0:
                                     deltaS = pixelsMoved(firstCentre, lastCentre) * 0.05
-                                    summaryImage = np.concatenate((firstImage,lastImage),axis=1)
+                                    if deltaS > 4:
+                                        summaryImage = np.concatenate((firstImage,lastImage),axis=1)
 
-                                    velocity = int((deltaS / (deltaT)) * 2.2)
+                                        velocity = int((deltaS / (deltaT)) * 2.2)
 
-                                    summaryText =  "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity,deltaS,deltaT)
+                                        summaryText =  "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity,deltaS,deltaT)
 
-                                    cv2.rectangle(summaryImage, (0, 0), (image_width*2, 50), (0, 0, 0), -1)
-                                    print(summaryText)
-                                    timeString = str(firstTime)
-                                    cv2.putText(summaryImage, timeString, (20, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-                                    timeString = str(lastTime)
-                                    cv2.putText(summaryImage, timeString, (20 + image_width, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-                                    cv2.putText(summaryImage, summaryText, (20 , 30), cv2.FONT_HERSHEY_PLAIN, 1,
-                                                (0, 0, 255), 1)
+                                        cv2.rectangle(summaryImage, (0, 0), (image_width*2, 50), (0, 0, 0), -1)
+                                        print(summaryText)
+                                        timeString = str(firstTime)
+                                        cv2.putText(summaryImage, timeString, (20, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                                        timeString = str(lastTime)
+                                        cv2.putText(summaryImage, timeString, (20 + image_width, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                                        cv2.putText(summaryImage, summaryText, (20 , 30), cv2.FONT_HERSHEY_PLAIN, 1,
+                                                    (0, 0, 255), 1)
 
-                                    cv2.imshow ("last summary", summaryImage)
+                                        cv2.imshow ("last summary", summaryImage)
 
-                                    timestr = "trackedCars/" + str(velocity) + "-" + time.strftime("%Y%m%d-%H%M%S.jpg")
-                                    cv2.imwrite(timestr,summaryImage)
-                                    srv.put(timestr, "car.jpg")
+                                        timestr = "trackedCars/" + str(velocity) + "-" + time.strftime("%Y%m%d-%H%M%S.jpg")
+                                        cv2.imwrite(timestr,summaryImage)
+                                        srv.put(timestr, "car.jpg")
                             break
 
 
