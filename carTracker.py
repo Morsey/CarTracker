@@ -4,210 +4,249 @@ import numpy as np
 import time
 import math
 from datetime import datetime
-import pysftp
-import os
+import cTDefinitions
+import cTFunctions as cT
 
-FAKE = False
-FAKE_SLEEP = 0.1
-def tallestContour(c):
-    (x, y, w, h) = cv2.boundingRect(c)
-    return h;
+SOURCE = cTDefinitions.SOURCE_HTTP
 
-def secondsTime(dt):
-    return  dt.second + dt.microsecond / 1000000
+HAVE_DISPLAY = True
 
-def centre(bbox):
-    return int(bbox[0] + bbox[2]/2), int(bbox[1] + bbox[3]/2)
-
-def pixelsMoved(oC,nC):
-    return math.sqrt(math.pow(math.fabs(oC[0] - nC[0]),2) +  math.pow(math.fabs(oC[1] - nC[1]),2))
-
-
-f = open("password")
-password = f.readline()
-
-password = str(password)
-cnopts = pysftp.CnOpts()
-cnopts.hostkeys = None
-srv = pysftp.Connection(host="home84386385.1and1-data.host",username="u35045545-9",password=password,cnopts=cnopts)
-srv.cd("/kunden/homepages/0/d84386385/htdocs/www.robmorse.com/cars")
-
-
-fgbg = cv2.createBackgroundSubtractorMOG2()
-kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(2,2))
-
-stream = urllib.request.urlopen('http://192.168.123.175:8080/?action=stream')
-if FAKE:
+if SOURCE == cTDefinitions.SOURCE_VIDEO:
     cap = cv2.VideoCapture('test.mp4')
+elif SOURCE == cTDefinitions.SOURCE_HTTP:
+    cap = cv2.VideoCapture('http://192.168.123.153:8080/?action=stream&.mjpg')
+elif SOURCE == cTDefinitions.SOURCE_LOCAL:
+    cap = cv2.VideoCapture(0)
+    cap.set(3, 320)
+    cap.set(4, 240)
 else:
-    cap = cv2.VideoCapture('http://192.168.123.175:8080/?action=stream&.mjpg')
+    print("Error: Unknown Source")
+    exit(1)
 
+# define image processing functions
+fgbg = cv2.createBackgroundSubtractorMOG2()
 
+kernel2x2R = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+kernel10x10E = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
 
-tracker = cv2.Tracker_create("MEDIANFLOW")
-bytes = bytes()
+logfile = open("log.csv", "a")
 
-lastTime =0
-firstTime =0
+# create viewing windows
+cv2.namedWindow('colour')
+cv2.namedWindow('backround subtraction')
+cv2.namedWindow('threshold')
+cv2.namedWindow('box')
+cv2.moveWindow('colour', 0, 0)
+cv2.moveWindow('backround subtraction', 0, 280)
+cv2.moveWindow('threshold', 320, 0)
+cv2.moveWindow('box', 320, 280)
+frameNo = 0
 
 while True:
+    if cv2.waitKey(1) == 27:
+        exit(0)
+    # Capture a frame
+    ok, frame = cT.getFrame(cap, SOURCE)
 
-    ok, i = cap.read()
+    frameNo = frameNo + 1
+    # print(frameNo)
     if not ok:
         break
-    if FAKE:
-        time.sleep(FAKE_SLEEP)
-    image_height,image_width = i.shape[:2]
+    frame = cv2.rotate(frame, cv2.ROTATE_180)
 
-    i =  cv2.rotate(i,cv2.ROTATE_180)
-    gr = cv2.cvtColor(i,cv2.COLOR_BGR2GRAY)
+    if HAVE_DISPLAY:
+        cv2.imshow('colour', frame)
 
-    #get changes
+    image_height, image_width = frame.shape[:2]
+    gr = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # get changes
     fgmask = fgbg.apply(gr)
-    fgmask = cv2.morphologyEx(fgmask,cv2.MORPH_OPEN,kernel)
 
+    # clean up by openening image - remove noise
+    fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel2x2R)
+    fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel10x10E)
 
-    ret, thresh = cv2.threshold(fgmask,127,255,0)
+    if HAVE_DISPLAY:
+        cv2.imshow('backround subtraction', fgmask)
 
-    #get countours
-    im2, contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    ret, thresh = cv2.threshold(fgmask, 254, 255, 0)
 
-    #sortedContours = sorted(contours,key=cv2.contourArea,reverse=True)
-    sortedContours = sorted(contours,key=tallestContour,reverse=True)
+    if HAVE_DISPLAY:
+        cv2.imshow('threshold', thresh)
 
-    cv2.imshow('colour', i)
+    # get countours
+    im2, contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE,
+                                                cv2.CHAIN_APPROX_SIMPLE)
+    if HAVE_DISPLAY:
+        cv2.drawContours(frame, contours, -1, (0, 0, 255), 1)
+        cv2.imshow('box', frame)
 
-    if sortedContours:
-        #We have a box
-        (x, y, w, h) = cv2.boundingRect(sortedContours[0])
-        bbox = (x,y,w,h)
-        #only look at big boxes
+    sortedContours = sorted(contours, key=cv2.contourArea, reverse=True)
+    # sortedContours = sorted(contours, key=cT.tallestContour, reverse=True)
 
-        if h > 10 and w > 10:
-            #start tracking if whole box in window
+    # if no contours restart capture
+    if not sortedContours:
+        continue
 
-            if x > 5 and x+w < image_width -5:
+    # We have a box
+    (x, y, w, h) = cv2.boundingRect(sortedContours[0])
+    bbox = (x, y, w, h)
 
-                ok = tracker.init(i, bbox)
+    # only look at big boxes
+    if w < 10 or h < 10:
+        continue
 
-                cv2.rectangle(i, (x, y), (x + w, y + h), (0, 255, 0), 1)
-                cv2.imshow('colour', i)
-                if ok:
-                    print("Have object to track")
-                    oldbbox = bbox
-                    oldtime = datetime.now()
-                    trackNo = 0;
-                    while True:
-                        trackNo = trackNo+1
+    # start tracking if whole box in window
+    if not (x > 2 and x + w < image_width - 2):
+        continue
 
-                        # Read a new frame
-                        ret, frame = cap.read()
-                        if FAKE:
-                            time.sleep(FAKE_SLEEP)
-                        frame =  cv2.rotate(frame,cv2.ROTATE_180)
-                        # Update tracker
+    # initialise tracker using grayscale image
+    tracker = cv2.Tracker_create("MEDIANFLOW")
+    ok = tracker.init(gr, bbox)
 
-                        ok, bbox = tracker.update(frame)
+    if HAVE_DISPLAY:
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        cv2.imshow('box', frame)
 
-                        newtime = datetime.now()
-                        deltaT = secondsTime(newtime) - secondsTime(oldtime)
-                        oldtime = newtime
+    if not ok:
+        continue
 
-                        #if close to the end of the frame, drop out
-                        if bbox[0] < 5 or bbox[1] < 5 or bbox[0] > (image_width - bbox[2] -5) or (bbox[1] > image_height - bbox[3] -5):
-                            print("at an edge   " ,ok, "  ", bbox)
-                            ok = False
+    oldbbox = bbox
+    oldtime = datetime.now()
+    trackNo = 0
 
-                        #check big enough object still
-                        if x < 10 or y < 10:
-                            print("too small")
-                            ok = False
+    # start tracking the found object
+    print("Tracking object")
+    while True:
+        trackNo = trackNo + 1
 
-                        oldC = centre(oldbbox)
-                        newC = centre(bbox)
-                        cv2.line(frame, oldC, newC, (0, 255, 0))
-                        oldbbox = bbox
+        # Read a new frame
+        ok, frame = cT.getFrame(cap, SOURCE)
+        if not ok:
+            break
+        frame = cv2.rotate(frame, cv2.ROTATE_180)
+        gr = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                        # find pixels moved
-                        deltaS = pixelsMoved(oldC, newC) * 0.05
+        newtime = datetime.now()
+        if HAVE_DISPLAY:
+            cv2.imshow('colour', frame)
 
-                        if deltaS == 0:
-                            print("no deltaS")
-                            ok = False
+        # Update tracker
+        ok, bbox = tracker.update(gr)
+        if not ok:
+            print("mid track: lost tracker")
+            break
 
-                        # calculate speed (1 pixel ~0.05m)
-                        velocity = int((deltaS / (deltaT)) * 2.2)
+        (x, y, w, h) = bbox
+        x = int(x)
+        y = int(y)
+        w = int(w)
+        h = int(h)
 
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        if HAVE_DISPLAY:
+            cv2.imshow('colour', frame)
 
+        deltaT = cT.secondsTime(newtime) - cT.secondsTime(oldtime)
+        oldtime = newtime
 
-                        # Draw bounding box
-                        if ok and deltaS > 0.2:
+        # if close to the end of the frame, drop out
+        if x < 2 or y < 2 or x > (image_width - w - 2) or \
+                (y > image_height - h - 2):
+            print("mid track: close to edges")
+            break
 
+        # check big enough object still
+        if x < 8 or y < 8:
+            print("mid track: small bbox")
+            break
 
-                            print(velocity, " ", deltaS, " ", deltaT)
+        # draw distance moved from last frame
+        oldC = cT.centre(oldbbox)
+        newC = cT.centre(bbox)
+        cv2.line(frame, oldC, newC, (255, 0, 0))
+        oldbbox = bbox
 
+        # find distance moved
+        deltaS = cT.pixelsMoved(oldC, newC)
 
+        # check distance moved is big enough in pixels
+        if deltaS < 2:
+            print("mid track: small distance")
+            break
 
-                            p1 = (int(bbox[0]), int(bbox[1]))
-                            p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-                            cv2.rectangle(frame, p1, p2, (0, 0, 255))
-                            cv2.rectangle(frame,(0,0),(image_width,60),(0,0,0),-1)
+        #convert to meters
+        deltaS = deltaS * cTDefinitions.PIXEL_DISTANCE
 
-                            #save first and last images, combine and save with time difference
-                            if trackNo ==1:
-                                firstImage = frame.copy()
-                                firstTime = oldtime
-                                firstCentre = newC
-                            lastImage = frame.copy()
-                            lastTime = oldtime
-                            lastCentre = newC
-                            lastVelocity = velocity
+        # calculate speed (1 pixel ~0.05m)
+        velocity = int((deltaS / deltaT) * cTDefinitions.MPS_MPH_CONVERSION)
 
+        # store first and last details for overview
+        if trackNo == 1:
+            firstImage = frame.copy()
+            firstTime = oldtime
+            firstCentre = newC
+        lastImage = frame.copy()
+        lastTime = oldtime
+        lastCentre = newC
+        lastVelocity = velocity
 
-                            speedText =  str(velocity)+ "mph"
-                            cv2.putText(frame,speedText,(20,20),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255),1)
-                            cv2.imshow('colour', frame)
-                            cv2.imwrite("car.jpg",frame)
-                            cv2.waitKey(1)
+        speedText = str(velocity) + "mph"
+        cv2.putText(frame, speedText, (20, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+        if HAVE_DISPLAY:
+            cv2.imshow('colour', frame)
 
+        cv2.imwrite("car.jpg", frame)
+        cv2.waitKey(1)
 
-                        if not ok:
-                            #reset tracker
-                            tracker = cv2.Tracker_create("MEDIANFLOW")
-                            print("Finished Tracking \n\n")
+    # save summary image if we have been tracking more than 2 pictures
+    if trackNo < 4:
+        print("not enough tracked frames")
+        continue
 
-                            #save summary image if we have been tracking
-                            if trackNo >0 :
-                                deltaT = secondsTime(lastTime) - secondsTime(firstTime)
-                                if deltaT > 0:
-                                    deltaS = pixelsMoved(firstCentre, lastCentre) * 0.05
-                                    if deltaS > 4:
-                                        summaryImage = np.concatenate((firstImage,lastImage),axis=1)
+    deltaT = cT.secondsTime(lastTime) - cT.secondsTime(firstTime)
 
-                                        velocity = int((deltaS / (deltaT)) * 2.2)
+    if deltaT < 0.01:
+        print("Too small time difference")
+        continue
 
-                                        summaryText =  "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity,deltaS,deltaT)
+    deltaS = cT.pixelsMoved(firstCentre, lastCentre) * cTDefinitions.PIXEL_DISTANCE
 
-                                        cv2.rectangle(summaryImage, (0, 0), (image_width*2, 50), (0, 0, 0), -1)
-                                        print(summaryText)
-                                        timeString = str(firstTime)
-                                        cv2.putText(summaryImage, timeString, (20, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-                                        timeString = str(lastTime)
-                                        cv2.putText(summaryImage, timeString, (20 + image_width, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-                                        cv2.putText(summaryImage, summaryText, (20 , 30), cv2.FONT_HERSHEY_PLAIN, 1,
-                                                    (0, 0, 255), 1)
+    if deltaS < 2:
+        print("Too small distance covered")
+        continue
 
-                                        cv2.imshow ("last summary", summaryImage)
+    summaryImage = np.concatenate((firstImage, lastImage), axis=1)
 
-                                        timestr = "trackedCars/" + str(velocity) + "-" + time.strftime("%Y%m%d-%H%M%S.png")
-                                        cv2.imwrite(timestr,summaryImage)
-                                        srv.put(timestr, "car.png")
-                            break
+    velocity = int((deltaS / deltaT) * cTDefinitions.MPS_MPH_CONVERSION)
 
+    summaryText = "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity,
+                                                                        deltaS,
+                                                                        deltaT)
 
-    #cv2.imshow('thresh',thresh)
+    cv2.rectangle(summaryImage, (0, 0), (image_width * 2, 50), (0, 0, 0), -1)
+
+    timeString = str(firstTime)
+    cv2.putText(summaryImage, timeString, (20, 15),
+                cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+    timeString = str(lastTime)
+    cv2.putText(summaryImage, timeString, (20 + image_width, 15),
+                cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+    cv2.putText(summaryImage, summaryText, (20, 30), cv2.FONT_HERSHEY_PLAIN, 1,
+                (0, 0, 255), 1)
+    if HAVE_DISPLAY:
+        cv2.imshow("last summary", summaryImage)
+
+    timestr = "trackedCars/" + time.strftime("%Y%m%d-%H%M%S.png") + "-" + str(
+        velocity)
+    cv2.imwrite(timestr, summaryImage)
+    cv2.imwrite('summary.jpg', summaryImage)
+    logText = "{0},{1:.2f},{2:.2f}".format(velocity, deltaS, deltaT)
+    logText = logText + time.strftime(",%Y,%m,%d,%H,%M,%S") + "\n"
+    logfile.write(logText)
+    trackNo = 0
+
 
     if cv2.waitKey(1) == 27:
         exit(0)
-
-
