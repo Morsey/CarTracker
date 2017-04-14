@@ -1,5 +1,4 @@
 import cv2
-import urllib.request
 import numpy as np
 import time
 import math
@@ -117,7 +116,6 @@ while True:
     trackNo = 0
 
     # start tracking the found object
-    print("Tracking object")
     while True:
         trackNo = trackNo + 1
 
@@ -135,7 +133,6 @@ while True:
         # Update tracker
         ok, bbox = tracker.update(gr)
         if not ok:
-            print("mid track: lost tracker")
             break
 
         (x, y, w, h) = bbox
@@ -154,12 +151,10 @@ while True:
         # if close to the end of the frame, drop out
         if x < 2 or y < 2 or x > (image_width - w - 2) or \
                 (y > image_height - h - 2):
-            print("mid track: close to edges")
             break
 
         # check big enough object still
         if x < 8 or y < 8:
-            print("mid track: small bbox")
             break
 
         # draw distance moved from last frame
@@ -173,7 +168,6 @@ while True:
 
         # check distance moved is big enough in pixels
         if deltaS < 2:
-            print("mid track: small distance")
             break
 
         #convert to meters
@@ -202,51 +196,48 @@ while True:
 
     # save summary image if we have been tracking more than 2 pictures
     if trackNo < 4:
-        print("not enough tracked frames")
         continue
 
     deltaT = cT.secondsTime(lastTime) - cT.secondsTime(firstTime)
 
     if deltaT < 0.01:
-        print("Too small time difference")
         continue
 
     deltaS = cT.pixelsMoved(firstCentre, lastCentre) * cTDefinitions.PIXEL_DISTANCE
 
     if deltaS < 2:
-        print("Too small distance covered")
         continue
 
-    summaryImage = np.concatenate((firstImage, lastImage), axis=1)
-
+    #calculate average velocity
     velocity = int((deltaS / deltaT) * cTDefinitions.MPS_MPH_CONVERSION)
 
-    summaryText = "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity,
-                                                                        deltaS,
-                                                                        deltaT)
 
+    #construct summary image
+    summaryImage = np.concatenate((firstImage, lastImage), axis=1)
     cv2.rectangle(summaryImage, (0, 0), (image_width * 2, 50), (0, 0, 0), -1)
 
     timeString = str(firstTime)
-    cv2.putText(summaryImage, timeString, (20, 15),
-                cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+    cv2.putText(summaryImage, timeString, (20, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+
     timeString = str(lastTime)
-    cv2.putText(summaryImage, timeString, (20 + image_width, 15),
-                cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-    cv2.putText(summaryImage, summaryText, (20, 30), cv2.FONT_HERSHEY_PLAIN, 1,
-                (0, 0, 255), 1)
+    cv2.putText(summaryImage, timeString, (20 + image_width, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+
+    summaryText = "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity, deltaS, deltaT)
+    cv2.putText(summaryImage, summaryText, (20, 30), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+
     if HAVE_DISPLAY:
         cv2.imshow("last summary", summaryImage)
 
-    timestr = "trackedCars/" + time.strftime("%Y%m%d-%H%M%S.png") + "-" + str(
-        velocity)
+    #save summary images
+    timestr = "trackedCars/" + time.strftime("%Y%m%d-%H%M%S.png") + "-" + str(velocity)
     cv2.imwrite(timestr, summaryImage)
     cv2.imwrite('summary.jpg', summaryImage)
+
+    #output to log file
     logText = "{0},{1:.2f},{2:.2f}".format(velocity, deltaS, deltaT)
     logText = logText + time.strftime(",%Y,%m,%d,%H,%M,%S") + "\n"
     logfile.write(logText)
     trackNo = 0
-
 
     if cv2.waitKey(1) == 27:
         exit(0)
