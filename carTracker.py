@@ -6,9 +6,9 @@ from datetime import datetime
 import cTDefinitions
 import cTFunctions as cT
 
-SOURCE = cTDefinitions.SOURCE_HTTP
+SOURCE = cTDefinitions.SOURCE_LOCAL
 
-HAVE_DISPLAY = True
+HAVE_DISPLAY = False
 
 if SOURCE == cTDefinitions.SOURCE_VIDEO:
     cap = cv2.VideoCapture('test.mp4')
@@ -30,15 +30,12 @@ kernel10x10E = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
 
 logfile = open("log.csv", "a")
 
-# create viewing windows
-cv2.namedWindow('colour')
-cv2.namedWindow('backround subtraction')
-cv2.namedWindow('threshold')
-cv2.namedWindow('box')
-cv2.moveWindow('colour', 0, 0)
-cv2.moveWindow('backround subtraction', 0, 280)
-cv2.moveWindow('threshold', 320, 0)
-cv2.moveWindow('box', 320, 280)
+if HAVE_DISPLAY:
+    # create viewing windows
+    cv2.namedWindow('colour')
+    cv2.namedWindow('box')
+    cv2.moveWindow('colour', 0, 0)
+    cv2.moveWindow('box', 320, 280)
 frameNo = 0
 
 while True:
@@ -66,19 +63,13 @@ while True:
     fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel2x2R)
     fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel10x10E)
 
-    if HAVE_DISPLAY:
-        cv2.imshow('backround subtraction', fgmask)
-
     ret, thresh = cv2.threshold(fgmask, 254, 255, 0)
-
-    if HAVE_DISPLAY:
-        cv2.imshow('threshold', thresh)
 
     # get countours
     im2, contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE,
                                                 cv2.CHAIN_APPROX_SIMPLE)
     if HAVE_DISPLAY:
-        cv2.drawContours(frame, contours, -1, (0, 0, 255), 1)
+        cv2.drawContours(frame, contours, -1, (255, 0, 0), 1)
         cv2.imshow('box', frame)
 
     sortedContours = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -141,7 +132,7 @@ while True:
         w = int(w)
         h = int(h)
 
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 1)
         if HAVE_DISPLAY:
             cv2.imshow('colour', frame)
 
@@ -160,7 +151,9 @@ while True:
         # draw distance moved from last frame
         oldC = cT.centre(oldbbox)
         newC = cT.centre(bbox)
-        cv2.line(frame, oldC, newC, (255, 0, 0))
+        
+
+        #cv2.line(frame, oldC, newC, (0, 255, 0),2)
         oldbbox = bbox
 
         # find distance moved
@@ -205,6 +198,9 @@ while True:
 
     deltaS = cT.pixelsMoved(firstCentre, lastCentre) * cTDefinitions.PIXEL_DISTANCE
 
+
+    direction = cT.upordown(firstCentre,lastCentre)
+	
     if deltaS < 2:
         continue
 
@@ -222,21 +218,25 @@ while True:
     timeString = str(lastTime)
     cv2.putText(summaryImage, timeString, (20 + image_width, 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
 
-    summaryText = "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity, deltaS, deltaT)
+    summaryText = "Speed: {0} Distance: {1:.2f}m Time: {2:.2f}s".format(velocity, deltaS, deltaT) + " " + direction
     cv2.putText(summaryImage, summaryText, (20, 30), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
 
     if HAVE_DISPLAY:
         cv2.imshow("last summary", summaryImage)
 
     #save summary images
-    timestr = "trackedCars/" + time.strftime("%Y%m%d-%H%M%S.png") + "-" + str(velocity)
+    timestr = "trackedCars/" + time.strftime("%Y%m%d-%H%M%S") + "-" + str(velocity) + "-" + direction + ".png"
     cv2.imwrite(timestr, summaryImage)
     cv2.imwrite('summary.jpg', summaryImage)
 
     #output to log file
     logText = "{0},{1:.2f},{2:.2f}".format(velocity, deltaS, deltaT)
-    logText = logText + time.strftime(",%Y,%m,%d,%H,%M,%S") + "\n"
+    logText = logText + time.strftime(",%Y,%m,%d,%H,%M,%S,")+direction + "\n"
     logfile.write(logText)
+    
+    logfile.flush()
+
+
     trackNo = 0
 
     if cv2.waitKey(1) == 27:

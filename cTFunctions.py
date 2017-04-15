@@ -20,6 +20,13 @@ def centre(bbox):
 def pixelsMoved(oC,nC):
     return math.sqrt(math.pow(math.fabs(oC[0] - nC[0]),2) +  math.pow(math.fabs(oC[1] - nC[1]),2))
 
+#calculate up or down 
+def upordown(oC,nC):
+    if nC[0] - oC[0] < 0:
+        return "down"
+    else:
+        return "up"
+
 #get a frame from a source
 def getFrame(cap,SOURCE):
     ok, i = cap.read()
